@@ -1,20 +1,20 @@
 name: Tự động dọn dẹp Firebase
 on:
   schedule:
-    - cron: '0 0 * * 0' # Chạy vào 00:00 mỗi Chủ Nhật hàng tuần
-  workflow_dispatch: # Cho phép bạn bấm nút chạy thử thủ công
+    - cron: '0 0 * * 0' # Chạy vào 00:00 mỗi Chủ Nhật
+  workflow_dispatch: # Cho phép chạy thử bằng tay
 
 jobs:
   delete-old-data:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Cài đặt Node.js
-        uses: actions/setup-node@v2
+        uses: actions/setup-node@v4
         with:
-          node-version: '16'
-      - name: Cài đặt thư viện firebase-admin
-        run: npm install firebase-admin
+          node-version: '20'
+      - name: Cài đặt thư viện firebase-admin bản ổn định
+        run: npm install firebase-admin@11.11.1
       - name: Chạy lệnh xóa dữ liệu cũ
         run: node auto_delete.js
         env:
