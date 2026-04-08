@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hệ Thống Giám Sát Lưu Lượng Nước</title>
+    <title>Giám sát lưu lượng nước hồi MN Đông Hải -> NM TCE</title>
     
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
@@ -16,7 +16,17 @@
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f0f2f5; margin: 0; padding: 20px; color: #333; }
         .container { max-width: 1100px; margin: 0 auto; }
-        h1 { text-align: center; color: #1a73e8; margin-bottom: 20px; text-transform: uppercase; letter-spacing: 1px; font-size: 24px;}
+        
+        /* Tiêu đề chính */
+        .main-title { 
+            text-align: center; 
+            color: #1a73e8; 
+            margin-bottom: 25px; 
+            text-transform: uppercase; 
+            letter-spacing: 0.5px; 
+            font-size: 24px;
+            font-weight: 700;
+        }
         
         .card { background: #fff; padding: 15px 20px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); margin-bottom: 20px; }
         
@@ -25,20 +35,25 @@
         .box h3 { margin: 0 0 5px 0; color: #5f6368; font-size: 13px; text-transform: uppercase; }
         .box p { margin: 0; font-size: 28px; font-weight: bold; color: #1a73e8; }
 
-        /* Thanh điều hướng ép trên 1 hàng */
+        /* Bố cục thanh công cụ */
         .nav-controls { 
             display: flex; 
-            justify-content: space-between; 
+            justify-content: space-between; /* Đẩy 2 cụm sang 2 bên */
             align-items: center; 
             margin-bottom: 15px; 
-            flex-wrap: nowrap; /* Ép không cho rớt dòng */
-            gap: 10px; 
             background: #f8f9fa; 
             padding: 10px; 
             border-radius: 8px; 
             border: 1px solid #e0e0e0;
         }
         
+        /* Cụm điều khiển bên trái */
+        .left-controls {
+            display: flex;
+            align-items: center;
+            gap: 15px; /* Khoảng cách giữa Menu và Nút bấm ngày */
+        }
+
         .btn-group { display: flex; gap: 5px; align-items: center; }
         
         button { padding: 8px 12px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px; transition: 0.2s; background: #1a73e8; color: white; display: flex; align-items: center; gap: 5px; }
@@ -60,7 +75,7 @@
     <div class="container">
         <div id="error-log"></div>
 
-        <h1>Giám Sát Lưu Lượng Nước Công Nghiệp</h1>
+        <h1 class="main-title">GIÁM SÁT LƯU LƯỢNG NƯỚC HỒI MN ĐÔNG HẢI ➔ NM TCE</h1>
         
         <div class="dashboard-grid">
             <div class="box">
@@ -75,16 +90,19 @@
 
         <div class="card">
             <div class="nav-controls">
-                <div class="btn-group">
-                    <button class="secondary" id="prevBtn" disabled>◀</button>
-                    <div id="dateLabel">Đang lấy dữ liệu...</div>
-                    <button class="secondary" id="nextBtn" disabled>▶</button>
-                </div>
+                
+                <div class="left-controls">
+                    <select id="chartTypeSelect">
+                        <option value="line">Lưu lượng</option>
+                        <option value="bar">Tổng lưu lượng</option>
+                    </select>
 
-                <select id="chartTypeSelect">
-                    <option value="line">Biểu đồ Trend (Đường)</option>
-                    <option value="bar">Tổng theo ngày (Cột)</option>
-                </select>
+                    <div class="btn-group" id="dateNavGroup">
+                        <button class="secondary" id="prevBtn" disabled>◀</button>
+                        <div id="dateLabel">Đang lấy dữ liệu...</div>
+                        <button class="secondary" id="nextBtn" disabled>▶</button>
+                    </div>
+                </div>
 
                 <div class="export-section">
                     <span style="font-weight: bold; font-size: 13px; color: #1a73e8;">📥 EXCEL:</span>
@@ -93,6 +111,7 @@
                     <input type="text" id="endDate" placeholder="Đến ngày...">
                     <button id="exportBtn">Tải file</button>
                 </div>
+
             </div>
 
             <div class="chart-container">
@@ -102,12 +121,10 @@
     </div>
 
     <script>
-        // Bắt lỗi hiển thị lên màn hình
         window.onerror = function(msg, url, line) {
             document.getElementById('error-log').innerText = "⚠️ LỖI: " + msg + " (Dòng: " + line + ")";
         };
 
-        // CẤU HÌNH FIREBASE
         const firebaseConfig = {
             apiKey: "AIzaSyCtjv45HXtm6z0zwBl5V5ClN8GryVDZrys",
             authDomain: "iot-condensed-water-dh.firebaseapp.com",
@@ -118,7 +135,6 @@
             appId: "1:61538686380:web:1e539724ecf3302e1c1609"
         };
 
-        // Khởi tạo Firebase
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
 
@@ -127,14 +143,12 @@
         let currentIndex = -1;
         let chartMode = 'line';
         
-        // Lấy ngày hiện tại
         const todayObj = new Date();
         const todayStr = todayObj.getFullYear() + "-" + String(todayObj.getMonth() + 1).padStart(2, '0') + "-" + String(todayObj.getDate()).padStart(2, '0');
         
         let currentRealtimeFlow = 0; 
         let realTimeInterval = null;
 
-        // Khởi tạo Flatpickr (Khóa tất cả ngày ban đầu, chỉ mở khi quét xong Firebase)
         let startFp = flatpickr("#startDate", { dateFormat: "Y-m-d", disable: [function(date) { return true; }] }); 
         let endFp = flatpickr("#endDate", { dateFormat: "Y-m-d", disable: [function(date) { return true; }] });
 
@@ -153,7 +167,6 @@
             });
         }
 
-        // 1. NGHE DỮ LIỆU REALTIME (Lấy số liệu 2 ô tổng)
         function updateRT(snap) {
             if(!snap.exists()) return;
             const data = snap.val();
@@ -164,7 +177,6 @@
         db.ref('rt').on('value', updateRT);
         db.ref('flow/rt').on('value', updateRT);
 
-        // 2. QUÉT TÌM NGÀY CÓ DỮ LIỆU TỪ THƯ MỤC HISTORY
         function fetchDates() {
             let refPaths = ['his', 'flow/his'];
             let loadedCount = 0;
@@ -178,12 +190,10 @@
                         });
                     }
 
-                    // Khi quét xong cả 2 đường dẫn
                     if(loadedCount === 2) {
                         availableDates.sort();
                         
                         if(availableDates.length > 0) {
-                            // Mở khóa các ngày có dữ liệu cho bộ chọn lịch
                             startFp.set("enable", availableDates);
                             endFp.set("enable", availableDates);
 
@@ -203,7 +213,6 @@
         }
         fetchDates();
 
-        // 3. TẢI DỮ LIỆU VẼ BIỂU ĐỒ
         async function loadDataByMode() {
             if(availableDates.length === 0) return;
             if(realTimeInterval) clearInterval(realTimeInterval);
@@ -234,7 +243,6 @@
             chart.data.datasets[0].data = values;
             chart.update();
 
-            // Tự động cuộn trendline cho ngày hôm nay
             if (date === todayStr) {
                 realTimeInterval = setInterval(() => {
                     const now = new Date();
@@ -254,7 +262,6 @@
 
         async function loadBarChart() {
             initChart('bar');
-            document.getElementById('dateLabel').innerText = "Thống kê";
             let labels = [], dailyUsage = [];
 
             for (let date of availableDates) {
@@ -276,12 +283,22 @@
             chart.update();
         }
 
-        // 4. XỬ LÝ NÚT BẤM (PREV/NEXT/SELECT)
         document.getElementById('prevBtn').onclick = () => { currentIndex--; loadDataByMode(); };
         document.getElementById('nextBtn').onclick = () => { currentIndex++; loadDataByMode(); };
-        document.getElementById('chartTypeSelect').onchange = (e) => { chartMode = e.target.value; loadDataByMode(); };
+        
+        // Sự kiện ẩn/hiện điều hướng ngày khi chọn chế độ
+        document.getElementById('chartTypeSelect').onchange = (e) => { 
+            chartMode = e.target.value; 
+            
+            if (chartMode === 'bar') {
+                document.getElementById('dateNavGroup').style.display = 'none';
+            } else {
+                document.getElementById('dateNavGroup').style.display = 'flex';
+            }
+            
+            loadDataByMode(); 
+        };
 
-        // 5. XUẤT EXCEL GỘP THEO RANGE (TỪ NGÀY ĐẾN NGÀY)
         document.getElementById('exportBtn').onclick = async () => {
             const start = document.getElementById('startDate').value;
             const end = document.getElementById('endDate').value;
@@ -317,10 +334,8 @@
             btn.innerText = "Tải file";
         };
 
-        // Khởi tạo giao diện biểu đồ rỗng ban đầu
         initChart('line');
         
-        // Timeout 5 giây dự phòng nếu Firebase rỗng/bị chặn
         setTimeout(() => {
             if(availableDates.length === 0) {
                 document.getElementById('dateLabel').innerText = "Chưa có dữ liệu";
