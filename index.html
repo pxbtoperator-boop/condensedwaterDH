@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Giám sát lưu lượng nước hồi MN Đông Hải -> NM TCE</title>
+    <title>Giám sát lưu lượng nước hồi NM Đông Hải -> NM TCE</title>
     
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
@@ -38,7 +38,7 @@
         /* Bố cục thanh công cụ */
         .nav-controls { 
             display: flex; 
-            justify-content: space-between; /* Đẩy 2 cụm sang 2 bên */
+            justify-content: space-between; 
             align-items: center; 
             margin-bottom: 15px; 
             background: #f8f9fa; 
@@ -51,7 +51,7 @@
         .left-controls {
             display: flex;
             align-items: center;
-            gap: 15px; /* Khoảng cách giữa Menu và Nút bấm ngày */
+            gap: 15px; 
         }
 
         .btn-group { display: flex; gap: 5px; align-items: center; }
@@ -75,16 +75,16 @@
     <div class="container">
         <div id="error-log"></div>
 
-        <h1 class="main-title">GIÁM SÁT LƯU LƯỢNG NƯỚC HỒI MN ĐÔNG HẢI ➔ NM TCE</h1>
+        <h1 class="main-title">GIÁM SÁT LƯU LƯỢNG NƯỚC HỒI NM ĐÔNG HẢI ➔ NM TCE</h1>
         
         <div class="dashboard-grid">
             <div class="box">
-                <h3>Lưu lượng tức thời</h3>
-                <p id="inst-val">0.000 <small style="font-size: 14px;">m³/h</small></p>
+                <h3>Lưu lượng tức thời (m³/h)</h3>
+                <p id="inst-val">0.000</p>
             </div>
             <div class="box">
-                <h3>Lưu lượng tổng (Hiện tại)</h3>
-                <p id="total-val">0.000 <small style="font-size: 14px;">m³</small></p>
+                <h3>Tổng (m³)</h3>
+                <p id="total-val">0.000</p>
             </div>
         </div>
 
@@ -286,7 +286,6 @@
         document.getElementById('prevBtn').onclick = () => { currentIndex--; loadDataByMode(); };
         document.getElementById('nextBtn').onclick = () => { currentIndex++; loadDataByMode(); };
         
-        // Sự kiện ẩn/hiện điều hướng ngày khi chọn chế độ
         document.getElementById('chartTypeSelect').onchange = (e) => { 
             chartMode = e.target.value; 
             
