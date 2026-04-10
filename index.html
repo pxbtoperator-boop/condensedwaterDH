@@ -19,43 +19,28 @@
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f0f2f5; margin: 0; padding: 20px; color: #333; }
         .container { max-width: 1100px; margin: 0 auto; }
         
-        /* Tiêu đề chính */
         .main-title { 
-            text-align: center; 
-            color: #1a73e8; 
-            margin-bottom: 25px; 
-            text-transform: uppercase; 
-            letter-spacing: 0.5px; 
-            font-size: 24px;
-            font-weight: 700;
+            text-align: center; color: #1a73e8; margin-bottom: 25px; 
+            text-transform: uppercase; letter-spacing: 0.5px; 
+            font-size: 24px; font-weight: 700;
         }
         
         .card { background: #fff; padding: 15px 20px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); margin-bottom: 20px; }
-        
         .dashboard-grid { display: flex; gap: 20px; margin-bottom: 20px; }
         .box { flex: 1; background: #fff; padding: 15px; border-radius: 12px; text-align: center; border-bottom: 4px solid #1a73e8; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
         .box h3 { margin: 0 0 5px 0; color: #5f6368; font-size: 13px; text-transform: uppercase; }
         .box p { margin: 0; font-size: 28px; font-weight: bold; color: #1a73e8; }
+        
+        .box.temp-box { border-bottom-color: #ff5722; }
+        .box.temp-box p { color: #ff5722; }
 
-        /* Bố cục thanh công cụ */
         .nav-controls { 
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center; 
-            margin-bottom: 15px; 
-            background: #f8f9fa; 
-            padding: 10px; 
-            border-radius: 8px; 
-            border: 1px solid #e0e0e0;
+            display: flex; justify-content: space-between; align-items: center; 
+            margin-bottom: 15px; background: #f8f9fa; padding: 10px; 
+            border-radius: 8px; border: 1px solid #e0e0e0;
         }
         
-        /* Cụm điều khiển bên trái */
-        .left-controls {
-            display: flex;
-            align-items: center;
-            gap: 15px; 
-        }
-
+        .left-controls { display: flex; align-items: center; gap: 15px; }
         .btn-group { display: flex; gap: 5px; align-items: center; }
         
         button { padding: 8px 12px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px; transition: 0.2s; background: #1a73e8; color: white; display: flex; align-items: center; gap: 5px; }
@@ -63,12 +48,11 @@
         button:disabled { background: #dadce0; cursor: not-allowed; color: #666;}
         button.secondary { background: #fff; color: #1a73e8; border: 1px solid #1a73e8; }
         
-        input[type="text"] { padding: 8px; border: 1px solid #dadce0; border-radius: 6px; width: 100px; text-align: center; cursor: pointer; font-weight: bold; font-size: 13px;}
-        select { padding: 8px; border-radius: 6px; border: 1px solid #dadce0; font-weight: 600; cursor: pointer; font-size: 13px;}
+        input[type="text"], select { padding: 8px; border: 1px solid #dadce0; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 13px;}
+        input[type="text"] { width: 100px; text-align: center; }
 
         .chart-container { position: relative; height: 400px; width: 100%; }
         #dateLabel { font-weight: bold; font-size: 15px; color: #202124; min-width: 130px; text-align: center; }
-        
         .export-section { display: flex; align-items: center; gap: 8px; }
         #error-log { color: red; text-align: center; font-weight: bold; margin-bottom: 10px; font-size: 13px;}
     </style>
@@ -84,9 +68,13 @@
                 <h3>Lưu lượng tức thời (m³/h)</h3>
                 <p id="inst-val">0.000</p>
             </div>
+            <div class="box temp-box">
+                <h3>Nhiệt độ nước (°C)</h3>
+                <p id="temp-val">0.0</p>
+            </div>
             <div class="box">
-                <h3>Tổng (m³)</h3>
-                <p id="total-val">0.000</p>
+                <h3>Tổng lưu lượng (m³)</h3>
+                <p id="total-val">0</p>
             </div>
         </div>
 
@@ -95,8 +83,8 @@
                 
                 <div class="left-controls">
                     <select id="chartTypeSelect">
-                        <option value="line">Lưu lượng</option>
-                        <option value="bar">Tổng lưu lượng</option>
+                        <option value="line">Lưu lượng & Nhiệt độ</option>
+                        <option value="bar">Tổng lưu lượng (Ngày)</option>
                     </select>
 
                     <div class="btn-group" id="dateNavGroup">
@@ -143,38 +131,137 @@
         let chart;
         let availableDates = [];
         let currentIndex = -1;
-        let chartMode = 'line';
+        let chartMode = 'line'; 
+        let dailyStats = {}; // Biến lưu dữ liệu trung bình cho Tooltip
         
         const todayObj = new Date();
         const todayStr = todayObj.getFullYear() + "-" + String(todayObj.getMonth() + 1).padStart(2, '0') + "-" + String(todayObj.getDate()).padStart(2, '0');
         
         let currentRealtimeFlow = 0; 
+        let currentRealtimeTemp = 0; 
         let realTimeInterval = null;
 
         let startFp = flatpickr("#startDate", { dateFormat: "Y-m-d", disable: [function(date) { return true; }] }); 
         let endFp = flatpickr("#endDate", { dateFormat: "Y-m-d", disable: [function(date) { return true; }] });
 
-        function initChart(type = 'line') {
+        function initChart(mode = 'line') {
             const ctx = document.getElementById('mainChart').getContext('2d');
             if (chart) chart.destroy();
-            chart = new Chart(ctx, {
-                type: type,
-                data: { labels: [], datasets: [{
-                    label: type === 'line' ? 'Lưu lượng tức thời (m³/h)' : 'Lượng nước tiêu thụ (m³/ngày)',
-                    data: [], borderColor: '#1a73e8',
-                    backgroundColor: type === 'line' ? 'rgba(26, 115, 232, 0.1)' : '#34a853',
-                    borderWidth: 2, fill: true, tension: 0.3
-                }]},
-                options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
-            });
+            
+            if (mode === 'line') {
+                chart = new Chart(ctx, {
+                    type: 'line',
+                    data: { labels: [], datasets: [
+                        {
+                            label: 'Lưu lượng (m³/h)',
+                            data: [], 
+                            borderColor: '#1a73e8',
+                            backgroundColor: 'rgba(26, 115, 232, 0.1)',
+                            borderWidth: 2, fill: true, tension: 0.3,
+                            yAxisID: 'y', 
+                            spanGaps: true
+                        },
+                        {
+                            label: 'Nhiệt độ (°C)',
+                            data: [], 
+                            borderColor: '#ff5722',
+                            backgroundColor: 'transparent',
+                            borderWidth: 2, fill: false, tension: 0.3,
+                            yAxisID: 'y1', 
+                            spanGaps: true
+                        }
+                    ]},
+                    options: { 
+                        responsive: true, maintainAspectRatio: false, 
+                        interaction: { mode: 'index', intersect: false },
+                        scales: { 
+                            y: { 
+                                type: 'linear', display: true, position: 'left', 
+                                title: { display: true, text: 'Lưu lượng (m³/h)' }
+                            },
+                            y1: { 
+                                type: 'linear', display: true, position: 'right', 
+                                title: { display: true, text: 'Nhiệt độ (°C)' },
+                                min: 0,      
+                                max: 300,    
+                                grid: { drawOnChartArea: false } 
+                            }
+                        } 
+                    }
+                });
+            } else if (mode === 'bar') {
+                // Biểu đồ CỘT: Duy nhất 1 cột Tổng lưu lượng
+                chart = new Chart(ctx, {
+                    type: 'bar',
+                    data: { labels: [], datasets: [{
+                        label: 'Lượng nước tiêu thụ (m³/ngày)',
+                        data: [], borderColor: '#34a853', backgroundColor: '#34a853', borderWidth: 2
+                    }]},
+                    options: { 
+                        responsive: true, 
+                        maintainAspectRatio: false, 
+                        scales: { y: { beginAtZero: true } },
+                        plugins: {
+                            tooltip: {
+                                padding: 12,
+                                callbacks: {
+                                    title: function() { return ''; },
+                                    label: function(context) {
+                                        let dateStr = context.label;
+                                        let parts = dateStr.split('-');
+                                        let formattedDate = parts[2] + '/' + parts[1] + '/' + parts[0];
+                                        
+                                        // Gọi dữ liệu đã tính toán ra
+                                        let stats = dailyStats[dateStr] || {};
+                                        let first = stats.first || 0;
+                                        let last = stats.last || 0;
+                                        let total = stats.total || 0;
+                                        let avgTemp = stats.avgTemp || "--";
+                                        let avgFlow = stats.avgFlow || "--";
+
+                                        // Hiển thị các thông số lên Tooltip
+                                        let line1 = `Tổng: Cuối (${last}) - Đầu (${first}) = ${total.toLocaleString('vi-VN')} m³`;
+                                        let line2 = `Nhiệt độ trung bình: ${avgTemp} °C`;
+                                        let line3 = `Lưu lượng trung bình: ${avgFlow} m³/h`;
+                                        
+                                        let timeText = "";
+                                        if (dateStr === todayStr) {
+                                            timeText = `Thời gian: Từ 0h ngày ${formattedDate} đến hiện tại`;
+                                        } else {
+                                            timeText = `Thời gian: Từ 0h đến 24h ngày ${formattedDate}`;
+                                        }
+
+                                        return [line1, line2, line3, "", timeText];
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
         }
 
         function updateRT(snap) {
             if(!snap.exists()) return;
             const data = snap.val();
+            
             currentRealtimeFlow = data.i || 0;
+            currentRealtimeTemp = data.temp || 0;
+
             document.getElementById('inst-val').innerText = currentRealtimeFlow.toFixed(3);
-            document.getElementById('total-val').innerText = (data.t || 0).toFixed(3);
+            // Ô TỔNG trên cùng hiển thị làm tròn số
+            document.getElementById('total-val').innerText = (data.t || 0).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+            
+            const tempBox = document.getElementById('temp-val');
+            if (currentRealtimeTemp < 10 || currentRealtimeTemp > 300) {
+                tempBox.innerText = "⚠️ Lỗi cáp";
+                tempBox.style.color = "red";
+                tempBox.style.fontSize = "22px";
+            } else {
+                tempBox.innerText = currentRealtimeTemp.toFixed(1);
+                tempBox.style.color = "#ff5722";
+                tempBox.style.fontSize = "28px";
+            }
         }
         db.ref('rt').on('value', updateRT);
         db.ref('flow/rt').on('value', updateRT);
@@ -239,23 +326,48 @@
             
             const history = snap.val() || {};
             const labels = Object.keys(history).sort();
-            const values = labels.map(t => history[t].i);
+            
+            const flowValues = [];
+            const tempValues = [];
+
+            labels.forEach(t => {
+                flowValues.push(history[t].i);
+                
+                let tempVal = history[t].temp;
+                if (tempVal === undefined || tempVal < 10 || tempVal > 300) {
+                    tempValues.push(null); // Lọc nhiễu
+                } else {
+                    tempValues.push(tempVal);
+                }
+            });
 
             chart.data.labels = labels;
-            chart.data.datasets[0].data = values;
+            chart.data.datasets[0].data = flowValues; 
+            chart.data.datasets[1].data = tempValues; 
             chart.update();
 
             if (date === todayStr) {
                 realTimeInterval = setInterval(() => {
                     const now = new Date();
                     const timeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+                    
+                    let tempToPush = (currentRealtimeTemp < 10 || currentRealtimeTemp > 300) ? null : currentRealtimeTemp;
+
                     if (chart.data.labels.length === 0 || chart.data.labels[chart.data.labels.length - 1] !== timeStr) {
                         chart.data.labels.push(timeStr);
                         chart.data.datasets[0].data.push(currentRealtimeFlow);
-                        if(chart.data.labels.length > 150) { chart.data.labels.shift(); chart.data.datasets[0].data.shift(); }
+                        chart.data.datasets[1].data.push(tempToPush);
+                        
+                        // Cập nhật bộ nhớ đệm lên 1500 điểm để vẽ mượt trọn 1 ngày
+                        if(chart.data.labels.length > 1500) { 
+                            chart.data.labels.shift(); 
+                            chart.data.datasets[0].data.shift(); 
+                            chart.data.datasets[1].data.shift();
+                        }
                         chart.update();
                     } else {
                         chart.data.datasets[0].data[chart.data.datasets[0].data.length - 1] = currentRealtimeFlow;
+                        chart.data.datasets[1].data[chart.data.datasets[1].data.length - 1] = tempToPush;
                         chart.update();
                     }
                 }, 5000);
@@ -265,21 +377,59 @@
         async function loadBarChart() {
             initChart('bar');
             let labels = [], dailyUsage = [];
+            dailyStats = {}; // Reset dữ liệu Tooltip
 
             for (let date of availableDates) {
-                let snapFirst = await db.ref('his/' + date).limitToFirst(1).once('value');
-                if(!snapFirst.exists()) snapFirst = await db.ref('flow/his/' + date).limitToFirst(1).once('value');
+                let snap = await db.ref('his/' + date).once('value');
+                if(!snap.exists()) snap = await db.ref('flow/his/' + date).once('value');
                 
-                let snapLast = await db.ref('his/' + date).limitToLast(1).once('value');
-                if(!snapLast.exists()) snapLast = await db.ref('flow/his/' + date).limitToLast(1).once('value');
-                
-                if (snapFirst.exists() && snapLast.exists()) {
-                    const firstVal = Object.values(snapFirst.val())[0].t;
-                    const lastVal = Object.values(snapLast.val())[0].t;
-                    labels.push(date);
-                    dailyUsage.push(Math.max(0, lastVal - firstVal)); 
+                if (snap.exists()) {
+                    let dataObj = snap.val();
+                    let keys = Object.keys(dataObj).sort();
+                    
+                    if (keys.length > 0) {
+                        // 1. Tính tổng lưu lượng
+                        let firstVal = dataObj[keys[0]].t;
+                        let lastVal = dataObj[keys[keys.length - 1]].t;
+                        let total = Math.max(0, lastVal - firstVal);
+
+                        // 2. Tính trung bình Nhiệt độ và Lưu lượng
+                        let sumTemp = 0, countTemp = 0;
+                        let sumFlow = 0, countFlow = 0;
+
+                        for (let key of keys) {
+                            let entry = dataObj[key];
+                            // Lọc nhiệt độ > 10 và < 300
+                            if (entry.temp !== undefined && entry.temp > 10 && entry.temp < 300) {
+                                sumTemp += entry.temp;
+                                countTemp++;
+                            }
+                            // Lọc lưu lượng > 0
+                            if (entry.i !== undefined && entry.i > 0) {
+                                sumFlow += entry.i;
+                                countFlow++;
+                            }
+                        }
+
+                        let avgTemp = countTemp > 0 ? (sumTemp / countTemp).toFixed(1) : "N/A";
+                        let avgFlow = countFlow > 0 ? (sumFlow / countFlow).toFixed(2) : "N/A";
+                        let roundedTotal = Math.round(total);
+
+                        // Lưu vào Object cấu hình Tooltip
+                        dailyStats[date] = {
+                            first: firstVal.toFixed(1),
+                            last: lastVal.toFixed(1),
+                            total: roundedTotal,
+                            avgTemp: avgTemp,
+                            avgFlow: avgFlow
+                        };
+
+                        labels.push(date);
+                        dailyUsage.push(roundedTotal);
+                    }
                 }
             }
+            
             chart.data.labels = labels;
             chart.data.datasets[0].data = dailyUsage;
             chart.update();
@@ -290,13 +440,8 @@
         
         document.getElementById('chartTypeSelect').onchange = (e) => { 
             chartMode = e.target.value; 
-            
-            if (chartMode === 'bar') {
-                document.getElementById('dateNavGroup').style.display = 'none';
-            } else {
-                document.getElementById('dateNavGroup').style.display = 'flex';
-            }
-            
+            if (chartMode === 'bar') document.getElementById('dateNavGroup').style.display = 'none';
+            else document.getElementById('dateNavGroup').style.display = 'flex';
             loadDataByMode(); 
         };
 
@@ -319,7 +464,13 @@
                 
                 if(snap.exists()){
                     Object.entries(snap.val()).forEach(([time, v]) => {
-                        allRows.push({ "Ngày": date, "Giờ": time, "Lưu lượng (m3/h)": v.i, "Số tổng (m3)": v.t });
+                        let tempExport = "N/A";
+                        if (v.temp !== undefined) tempExport = (v.temp < 10 || v.temp > 300) ? "Lỗi cảm biến" : v.temp;
+
+                        allRows.push({ 
+                            "Ngày": date, "Giờ": time, 
+                            "Lưu lượng (m3/h)": v.i, "Số tổng (m3)": v.t, "Nhiệt độ (°C)": tempExport
+                        });
                     });
                 }
             }
@@ -336,12 +487,7 @@
         };
 
         initChart('line');
-        
-        setTimeout(() => {
-            if(availableDates.length === 0) {
-                document.getElementById('dateLabel').innerText = "Chưa có dữ liệu";
-            }
-        }, 5000);
+        setTimeout(() => { if(availableDates.length === 0) document.getElementById('dateLabel').innerText = "Chưa có dữ liệu"; }, 5000);
     </script>
 </body>
 </html>
