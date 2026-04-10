@@ -43,7 +43,7 @@
         .left-controls { display: flex; align-items: center; gap: 15px; }
         .btn-group { display: flex; gap: 5px; align-items: center; }
         
-        button { padding: 8px 12px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px; transition: 0.2s; background: #1a73e8; color: white; display: flex; align-items: center; gap: 5px; }
+        button { padding: 8px 12px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px; transition: 0.2s; background: #1a73e8; color: white; display: flex; align-items: center; justify-content: center; gap: 5px; }
         button:hover { background: #1557b0; }
         button:disabled { background: #dadce0; cursor: not-allowed; color: #666;}
         button.secondary { background: #fff; color: #1a73e8; border: 1px solid #1a73e8; }
@@ -55,6 +55,36 @@
         #dateLabel { font-weight: bold; font-size: 15px; color: #202124; min-width: 130px; text-align: center; }
         .export-section { display: flex; align-items: center; gap: 8px; }
         #error-log { color: red; text-align: center; font-weight: bold; margin-bottom: 10px; font-size: 13px;}
+
+        /* =========================================
+           TỐI ƯU GIAO DIỆN ĐIỆN THOẠI (MOBILE RESPONSIVE)
+           ========================================= */
+        @media (max-width: 768px) {
+            body { padding: 10px; }
+            .main-title { font-size: 20px; margin-bottom: 15px; }
+            
+            /* Xếp dọc 3 ô dữ liệu */
+            .dashboard-grid { flex-direction: column; gap: 12px; }
+            .box p { font-size: 32px; } /* Phóng to số liệu xíu cho dễ nhìn trên đt */
+
+            /* Xếp dọc thanh công cụ điều khiển */
+            .nav-controls { flex-direction: column; gap: 15px; align-items: stretch; }
+            
+            .left-controls { flex-direction: column; width: 100%; gap: 10px; }
+            .left-controls select { width: 100%; text-align: center; font-size: 14px; padding: 10px;}
+            
+            .btn-group { width: 100%; justify-content: space-between; }
+            .btn-group button { width: 45px; height: 40px; }
+            
+            /* Khu vực tải Excel chia làm nhiều hàng */
+            .export-section { flex-wrap: wrap; justify-content: center; gap: 10px; }
+            .export-section > span:first-child { width: 100%; text-align: center; margin-bottom: -5px; }
+            .export-section input[type="text"] { flex: 1; min-width: 120px; font-size: 14px; padding: 10px;}
+            .export-section button { width: 100%; padding: 12px; font-size: 14px; margin-top: 5px; }
+
+            /* Giảm chiều cao biểu đồ một chút để tránh cuộn trang quá nhiều */
+            .chart-container { height: 320px; }
+        }
     </style>
 </head>
 <body>
@@ -95,11 +125,11 @@
                 </div>
 
                 <div class="export-section">
-                    <span style="font-weight: bold; font-size: 13px; color: #1a73e8;">📥 EXCEL:</span>
+                    <span style="font-weight: bold; font-size: 13px; color: #1a73e8;">📥 TẢI EXCEL:</span>
                     <input type="text" id="startDate" placeholder="Từ ngày...">
                     <span>-</span>
                     <input type="text" id="endDate" placeholder="Đến ngày...">
-                    <button id="exportBtn">Tải file</button>
+                    <button id="exportBtn">TẢI FILE</button>
                 </div>
 
             </div>
@@ -132,7 +162,7 @@
         let availableDates = [];
         let currentIndex = -1;
         let chartMode = 'line'; 
-        let dailyStats = {}; // Biến lưu dữ liệu trung bình cho Tooltip
+        let dailyStats = {}; 
         
         const todayObj = new Date();
         const todayStr = todayObj.getFullYear() + "-" + String(todayObj.getMonth() + 1).padStart(2, '0') + "-" + String(todayObj.getDate()).padStart(2, '0');
@@ -190,7 +220,6 @@
                     }
                 });
             } else if (mode === 'bar') {
-                // Biểu đồ CỘT: Duy nhất 1 cột Tổng lưu lượng
                 chart = new Chart(ctx, {
                     type: 'bar',
                     data: { labels: [], datasets: [{
@@ -211,7 +240,6 @@
                                         let parts = dateStr.split('-');
                                         let formattedDate = parts[2] + '/' + parts[1] + '/' + parts[0];
                                         
-                                        // Gọi dữ liệu đã tính toán ra
                                         let stats = dailyStats[dateStr] || {};
                                         let first = stats.first || 0;
                                         let last = stats.last || 0;
@@ -219,7 +247,6 @@
                                         let avgTemp = stats.avgTemp || "--";
                                         let avgFlow = stats.avgFlow || "--";
 
-                                        // Hiển thị các thông số lên Tooltip
                                         let line1 = `Tổng: Cuối (${last}) - Đầu (${first}) = ${total.toLocaleString('vi-VN')} m³`;
                                         let line2 = `Nhiệt độ trung bình: ${avgTemp} °C`;
                                         let line3 = `Lưu lượng trung bình: ${avgFlow} m³/h`;
@@ -249,245 +276,8 @@
             currentRealtimeTemp = data.temp || 0;
 
             document.getElementById('inst-val').innerText = currentRealtimeFlow.toFixed(3);
-            // Ô TỔNG trên cùng hiển thị làm tròn số
             document.getElementById('total-val').innerText = (data.t || 0).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
             
             const tempBox = document.getElementById('temp-val');
             if (currentRealtimeTemp < 10 || currentRealtimeTemp > 300) {
                 tempBox.innerText = "⚠️ Lỗi cáp";
-                tempBox.style.color = "red";
-                tempBox.style.fontSize = "22px";
-            } else {
-                tempBox.innerText = currentRealtimeTemp.toFixed(1);
-                tempBox.style.color = "#ff5722";
-                tempBox.style.fontSize = "28px";
-            }
-        }
-        db.ref('rt').on('value', updateRT);
-        db.ref('flow/rt').on('value', updateRT);
-
-        function fetchDates() {
-            let refPaths = ['his', 'flow/his'];
-            let loadedCount = 0;
-
-            refPaths.forEach(path => {
-                db.ref(path).on('value', (snap) => {
-                    loadedCount++;
-                    if(snap.exists()) {
-                        Object.keys(snap.val()).forEach(dateStr => {
-                            if(!availableDates.includes(dateStr)) availableDates.push(dateStr);
-                        });
-                    }
-
-                    if(loadedCount === 2) {
-                        availableDates.sort();
-                        
-                        if(availableDates.length > 0) {
-                            startFp.set("enable", availableDates);
-                            endFp.set("enable", availableDates);
-
-                            if(currentIndex === -1) {
-                                currentIndex = availableDates.indexOf(todayStr);
-                                if (currentIndex === -1) currentIndex = availableDates.length - 1;
-                                loadDataByMode();
-                            } else {
-                                updateNavButtons();
-                            }
-                        } else {
-                            document.getElementById('dateLabel').innerText = "Chưa có dữ liệu";
-                        }
-                    }
-                });
-            });
-        }
-        fetchDates();
-
-        async function loadDataByMode() {
-            if(availableDates.length === 0) return;
-            if(realTimeInterval) clearInterval(realTimeInterval);
-
-            if (chartMode === 'line') await loadLineChart(availableDates[currentIndex]);
-            else await loadBarChart();
-            
-            updateNavButtons();
-        }
-
-        function updateNavButtons() {
-            document.getElementById('prevBtn').disabled = (currentIndex <= 0 || chartMode === 'bar');
-            document.getElementById('nextBtn').disabled = (currentIndex >= availableDates.length - 1 || chartMode === 'bar');
-        }
-
-        async function loadLineChart(date) {
-            initChart('line');
-            document.getElementById('dateLabel').innerText = "Ngày: " + date;
-            
-            let snap = await db.ref('his/' + date).once('value');
-            if (!snap.exists()) snap = await db.ref('flow/his/' + date).once('value');
-            
-            const history = snap.val() || {};
-            const labels = Object.keys(history).sort();
-            
-            const flowValues = [];
-            const tempValues = [];
-
-            labels.forEach(t => {
-                flowValues.push(history[t].i);
-                
-                let tempVal = history[t].temp;
-                if (tempVal === undefined || tempVal < 10 || tempVal > 300) {
-                    tempValues.push(null); // Lọc nhiễu
-                } else {
-                    tempValues.push(tempVal);
-                }
-            });
-
-            chart.data.labels = labels;
-            chart.data.datasets[0].data = flowValues; 
-            chart.data.datasets[1].data = tempValues; 
-            chart.update();
-
-            if (date === todayStr) {
-                realTimeInterval = setInterval(() => {
-                    const now = new Date();
-                    const timeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
-                    
-                    let tempToPush = (currentRealtimeTemp < 10 || currentRealtimeTemp > 300) ? null : currentRealtimeTemp;
-
-                    if (chart.data.labels.length === 0 || chart.data.labels[chart.data.labels.length - 1] !== timeStr) {
-                        chart.data.labels.push(timeStr);
-                        chart.data.datasets[0].data.push(currentRealtimeFlow);
-                        chart.data.datasets[1].data.push(tempToPush);
-                        
-                        // Cập nhật bộ nhớ đệm lên 1500 điểm để vẽ mượt trọn 1 ngày
-                        if(chart.data.labels.length > 1500) { 
-                            chart.data.labels.shift(); 
-                            chart.data.datasets[0].data.shift(); 
-                            chart.data.datasets[1].data.shift();
-                        }
-                        chart.update();
-                    } else {
-                        chart.data.datasets[0].data[chart.data.datasets[0].data.length - 1] = currentRealtimeFlow;
-                        chart.data.datasets[1].data[chart.data.datasets[1].data.length - 1] = tempToPush;
-                        chart.update();
-                    }
-                }, 5000);
-            }
-        }
-
-        async function loadBarChart() {
-            initChart('bar');
-            let labels = [], dailyUsage = [];
-            dailyStats = {}; // Reset dữ liệu Tooltip
-
-            for (let date of availableDates) {
-                let snap = await db.ref('his/' + date).once('value');
-                if(!snap.exists()) snap = await db.ref('flow/his/' + date).once('value');
-                
-                if (snap.exists()) {
-                    let dataObj = snap.val();
-                    let keys = Object.keys(dataObj).sort();
-                    
-                    if (keys.length > 0) {
-                        // 1. Tính tổng lưu lượng
-                        let firstVal = dataObj[keys[0]].t;
-                        let lastVal = dataObj[keys[keys.length - 1]].t;
-                        let total = Math.max(0, lastVal - firstVal);
-
-                        // 2. Tính trung bình Nhiệt độ và Lưu lượng
-                        let sumTemp = 0, countTemp = 0;
-                        let sumFlow = 0, countFlow = 0;
-
-                        for (let key of keys) {
-                            let entry = dataObj[key];
-                            // Lọc nhiệt độ > 10 và < 300
-                            if (entry.temp !== undefined && entry.temp > 10 && entry.temp < 300) {
-                                sumTemp += entry.temp;
-                                countTemp++;
-                            }
-                            // Lọc lưu lượng > 0
-                            if (entry.i !== undefined && entry.i > 0) {
-                                sumFlow += entry.i;
-                                countFlow++;
-                            }
-                        }
-
-                        let avgTemp = countTemp > 0 ? (sumTemp / countTemp).toFixed(1) : "N/A";
-                        let avgFlow = countFlow > 0 ? (sumFlow / countFlow).toFixed(2) : "N/A";
-                        let roundedTotal = Math.round(total);
-
-                        // Lưu vào Object cấu hình Tooltip
-                        dailyStats[date] = {
-                            first: firstVal.toFixed(1),
-                            last: lastVal.toFixed(1),
-                            total: roundedTotal,
-                            avgTemp: avgTemp,
-                            avgFlow: avgFlow
-                        };
-
-                        labels.push(date);
-                        dailyUsage.push(roundedTotal);
-                    }
-                }
-            }
-            
-            chart.data.labels = labels;
-            chart.data.datasets[0].data = dailyUsage;
-            chart.update();
-        }
-
-        document.getElementById('prevBtn').onclick = () => { currentIndex--; loadDataByMode(); };
-        document.getElementById('nextBtn').onclick = () => { currentIndex++; loadDataByMode(); };
-        
-        document.getElementById('chartTypeSelect').onchange = (e) => { 
-            chartMode = e.target.value; 
-            if (chartMode === 'bar') document.getElementById('dateNavGroup').style.display = 'none';
-            else document.getElementById('dateNavGroup').style.display = 'flex';
-            loadDataByMode(); 
-        };
-
-        document.getElementById('exportBtn').onclick = async () => {
-            const start = document.getElementById('startDate').value;
-            const end = document.getElementById('endDate').value;
-            
-            if(!start || !end) return alert("Vui lòng chọn Ngày Bắt Đầu và Ngày Kết Thúc!");
-            if(new Date(start) > new Date(end)) return alert("Ngày bắt đầu phải nhỏ hơn hoặc bằng Ngày kết thúc!");
-
-            const btn = document.getElementById('exportBtn');
-            btn.innerText = "⏳ Đang tạo...";
-            
-            let allRows = [];
-            let filteredDates = availableDates.filter(d => d >= start && d <= end);
-
-            for (let date of filteredDates) {
-                let snap = await db.ref('his/' + date).once('value');
-                if(!snap.exists()) snap = await db.ref('flow/his/' + date).once('value');
-                
-                if(snap.exists()){
-                    Object.entries(snap.val()).forEach(([time, v]) => {
-                        let tempExport = "N/A";
-                        if (v.temp !== undefined) tempExport = (v.temp < 10 || v.temp > 300) ? "Lỗi cảm biến" : v.temp;
-
-                        allRows.push({ 
-                            "Ngày": date, "Giờ": time, 
-                            "Lưu lượng (m3/h)": v.i, "Số tổng (m3)": v.t, "Nhiệt độ (°C)": tempExport
-                        });
-                    });
-                }
-            }
-
-            if(allRows.length > 0) {
-                const ws = XLSX.utils.json_to_sheet(allRows);
-                const wb = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(wb, ws, "Bao_Cao");
-                XLSX.writeFile(wb, `Bao_Cao_${start}_To_${end}.xlsx`);
-            } else {
-                alert("Không có dữ liệu trong khoảng này!");
-            }
-            btn.innerText = "Tải file";
-        };
-
-        initChart('line');
-        setTimeout(() => { if(availableDates.length === 0) document.getElementById('dateLabel').innerText = "Chưa có dữ liệu"; }, 5000);
-    </script>
-</body>
-</html>
