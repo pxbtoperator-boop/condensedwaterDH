@@ -19,10 +19,28 @@
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f0f2f5; margin: 0; padding: 20px; color: #333; }
         .container { max-width: 1100px; margin: 0 auto; }
         
+        /* CĂN CHỈNH LẠI TIÊU ĐỀ VÀ DẤU CHẤM TRẠNG THÁI */
         .main-title { 
-            text-align: center; color: #1a73e8; margin-bottom: 25px; 
+            color: #1a73e8; margin-bottom: 25px; 
             text-transform: uppercase; letter-spacing: 0.5px; 
             font-size: 24px; font-weight: 700;
+            display: flex; justify-content: center; align-items: center; gap: 12px;
+        }
+
+        #esp-status {
+            width: 18px; height: 18px;
+            background-color: #ea4335; /* Đỏ mặc định khi Offline */
+            border-radius: 50%;
+            display: inline-block;
+            box-shadow: 0 0 6px rgba(234, 67, 53, 0.5); /* Hiệu ứng tỏa sáng đỏ */
+            transition: background-color 0.3s ease, box-shadow 0.3s ease;
+            cursor: help;
+        }
+
+        /* Lớp CSS khi Online */
+        .status-online {
+            background-color: #34a853 !important; 
+            box-shadow: 0 0 10px rgba(52, 168, 83, 0.8) !important; /* Tỏa sáng xanh */
         }
         
         .card { background: #fff; padding: 15px 20px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); margin-bottom: 20px; }
@@ -58,7 +76,7 @@
 
         @media (max-width: 768px) {
             body { padding: 10px; }
-            .main-title { font-size: 20px; margin-bottom: 15px; }
+            .main-title { font-size: 18px; margin-bottom: 15px; }
             
             .dashboard-grid { flex-direction: column; gap: 12px; }
             .box p { font-size: 32px; }
@@ -84,7 +102,10 @@
     <div class="container">
         <div id="error-log"></div>
 
-        <h1 class="main-title">GIÁM SÁT LƯU LƯỢNG NƯỚC HỒI NM ĐÔNG HẢI ➔ NM TCE</h1>
+        <h1 class="main-title">
+            <span id="esp-status" title="Bị mất kết nối (Offline)"></span>
+            GIÁM SÁT LƯU LƯỢNG NƯỚC HỒI NM ĐÔNG HẢI ➔ NM TCE
+        </h1>
         
         <div class="dashboard-grid">
             <div class="box">
@@ -138,7 +159,6 @@
             document.getElementById('error-log').innerText = "⚠️ LỖI: " + msg + " (Dòng: " + line + ")";
         };
 
-        // --- HÀM CHUẨN HÓA ĐỊNH DẠNG SỐ ---
         function fmt(val, decimals) {
             if (val === undefined || val === null || val === "N/A" || isNaN(val)) return val;
             let parts = Number(val).toFixed(decimals).split('.');
@@ -170,7 +190,7 @@
         
         let currentRealtimeFlow = 0; 
         let currentRealtimeTemp = 0; 
-        let realTimeInterval = null;
+        let espStatusTimeout = null;
 
         let startFp = flatpickr("#startDate", { dateFormat: "Y-m-d", disable: [function(date) { return true; }] }); 
         let endFp = flatpickr("#endDate", { dateFormat: "Y-m-d", disable: [function(date) { return true; }] });
@@ -291,10 +311,25 @@
             }
         }
 
+        // ==========================================
+        // CẬP NHẬT TRẠNG THÁI VÀ DỮ LIỆU REAL-TIME
+        // ==========================================
         function updateRT(snap) {
             if(!snap.exists()) return;
             const data = snap.val();
             
+            // LOGIC SÁNG ĐÈN XANH
+            const statusDot = document.getElementById('esp-status');
+            statusDot.classList.add('status-online');
+            statusDot.title = "Đang hoạt động (Online)";
+            
+            clearTimeout(espStatusTimeout);
+            espStatusTimeout = setTimeout(() => {
+                // TẮT ĐÈN XANH -> VỀ MÀU ĐỎ MẶC ĐỊNH
+                statusDot.classList.remove('status-online');
+                statusDot.title = "Bị mất kết nối (Offline)";
+            }, 15000);
+
             currentRealtimeFlow = data.i || 0;
             currentRealtimeTemp = data.temp || 0;
 
@@ -310,6 +345,27 @@
                 tempBox.innerText = fmt(currentRealtimeTemp, 1);
                 tempBox.style.color = "#ff5722";
                 tempBox.style.fontSize = "28px";
+            }
+
+            if (chartMode === 'line' && availableDates[currentIndex] === todayStr && chart) {
+                const now = new Date();
+                const timeStr = now.getHours().toString().padStart(2, '0') + ':' + 
+                                now.getMinutes().toString().padStart(2, '0') + ':' + 
+                                now.getSeconds().toString().padStart(2, '0');
+                
+                let tempToPush = (currentRealtimeTemp < 10 || currentRealtimeTemp > 300) ? null : currentRealtimeTemp;
+
+                chart.data.labels.push(timeStr);
+                chart.data.datasets[0].data.push(currentRealtimeFlow);
+                chart.data.datasets[1].data.push(tempToPush);
+                
+                if(chart.data.labels.length > 1500) { 
+                    chart.data.labels.shift(); 
+                    chart.data.datasets[0].data.shift(); 
+                    chart.data.datasets[1].data.shift();
+                }
+                
+                chart.update('none'); 
             }
         }
         db.ref('rt').on('value', updateRT);
@@ -353,7 +409,6 @@
 
         async function loadDataByMode() {
             if(availableDates.length === 0) return;
-            if(realTimeInterval) clearInterval(realTimeInterval);
 
             if (chartMode === 'line') await loadLineChart(availableDates[currentIndex]);
             else await loadBarChart();
@@ -394,32 +449,6 @@
             chart.data.datasets[0].data = flowValues; 
             chart.data.datasets[1].data = tempValues; 
             chart.update();
-
-            if (date === todayStr) {
-                realTimeInterval = setInterval(() => {
-                    const now = new Date();
-                    const timeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
-                    
-                    let tempToPush = (currentRealtimeTemp < 10 || currentRealtimeTemp > 300) ? null : currentRealtimeTemp;
-
-                    if (chart.data.labels.length === 0 || chart.data.labels[chart.data.labels.length - 1] !== timeStr) {
-                        chart.data.labels.push(timeStr);
-                        chart.data.datasets[0].data.push(currentRealtimeFlow);
-                        chart.data.datasets[1].data.push(tempToPush);
-                        
-                        if(chart.data.labels.length > 1500) { 
-                            chart.data.labels.shift(); 
-                            chart.data.datasets[0].data.shift(); 
-                            chart.data.datasets[1].data.shift();
-                        }
-                        chart.update();
-                    } else {
-                        chart.data.datasets[0].data[chart.data.datasets[0].data.length - 1] = currentRealtimeFlow;
-                        chart.data.datasets[1].data[chart.data.datasets[1].data.length - 1] = tempToPush;
-                        chart.update();
-                    }
-                }, 5000);
-            }
         }
 
         async function loadBarChart() {
@@ -437,7 +466,6 @@
                     let keys = Object.keys(dataObj).sort();
                     
                     if (keys.length > 0) {
-                        // TÌM SỐ ĐẦU TIÊN HỢP LỆ LỚN HƠN 0
                         let firstKey = keys[0];
                         let firstVal = 0;
                         for (let key of keys) {
@@ -448,7 +476,6 @@
                             }
                         }
 
-                        // TÌM SỐ CUỐI CÙNG HỢP LỆ LỚN HƠN 0
                         let lastKey = keys[keys.length - 1];
                         let lastVal = 0;
                         for (let i = keys.length - 1; i >= 0; i--) {
