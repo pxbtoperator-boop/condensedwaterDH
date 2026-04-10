@@ -281,3 +281,233 @@
             const tempBox = document.getElementById('temp-val');
             if (currentRealtimeTemp < 10 || currentRealtimeTemp > 300) {
                 tempBox.innerText = "⚠️ Lỗi cáp";
+                tempBox.style.color = "red";
+                tempBox.style.fontSize = "22px";
+            } else {
+                tempBox.innerText = currentRealtimeTemp.toFixed(1);
+                tempBox.style.color = "#ff5722";
+                tempBox.style.fontSize = "28px"; // Trên PC giữ nguyên, mobile tự phóng qua CSS
+            }
+        }
+        db.ref('rt').on('value', updateRT);
+        db.ref('flow/rt').on('value', updateRT);
+
+        function fetchDates() {
+            let refPaths = ['his', 'flow/his'];
+            let loadedCount = 0;
+
+            refPaths.forEach(path => {
+                db.ref(path).on('value', (snap) => {
+                    loadedCount++;
+                    if(snap.exists()) {
+                        Object.keys(snap.val()).forEach(dateStr => {
+                            if(!availableDates.includes(dateStr)) availableDates.push(dateStr);
+                        });
+                    }
+
+                    if(loadedCount === 2) {
+                        availableDates.sort();
+                        
+                        if(availableDates.length > 0) {
+                            startFp.set("enable", availableDates);
+                            endFp.set("enable", availableDates);
+
+                            if(currentIndex === -1) {
+                                currentIndex = availableDates.indexOf(todayStr);
+                                if (currentIndex === -1) currentIndex = availableDates.length - 1;
+                                loadDataByMode();
+                            } else {
+                                updateNavButtons();
+                            }
+                        } else {
+                            document.getElementById('dateLabel').innerText = "Chưa có dữ liệu";
+                        }
+                    }
+                });
+            });
+        }
+        fetchDates();
+
+        async function loadDataByMode() {
+            if(availableDates.length === 0) return;
+            if(realTimeInterval) clearInterval(realTimeInterval);
+
+            if (chartMode === 'line') await loadLineChart(availableDates[currentIndex]);
+            else await loadBarChart();
+            
+            updateNavButtons();
+        }
+
+        function updateNavButtons() {
+            document.getElementById('prevBtn').disabled = (currentIndex <= 0 || chartMode === 'bar');
+            document.getElementById('nextBtn').disabled = (currentIndex >= availableDates.length - 1 || chartMode === 'bar');
+        }
+
+        async function loadLineChart(date) {
+            initChart('line');
+            document.getElementById('dateLabel').innerText = "Ngày: " + date;
+            
+            let snap = await db.ref('his/' + date).once('value');
+            if (!snap.exists()) snap = await db.ref('flow/his/' + date).once('value');
+            
+            const history = snap.val() || {};
+            const labels = Object.keys(history).sort();
+            
+            const flowValues = [];
+            const tempValues = [];
+
+            labels.forEach(t => {
+                flowValues.push(history[t].i);
+                
+                let tempVal = history[t].temp;
+                if (tempVal === undefined || tempVal < 10 || tempVal > 300) {
+                    tempValues.push(null); 
+                } else {
+                    tempValues.push(tempVal);
+                }
+            });
+
+            chart.data.labels = labels;
+            chart.data.datasets[0].data = flowValues; 
+            chart.data.datasets[1].data = tempValues; 
+            chart.update();
+
+            if (date === todayStr) {
+                realTimeInterval = setInterval(() => {
+                    const now = new Date();
+                    const timeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+                    
+                    let tempToPush = (currentRealtimeTemp < 10 || currentRealtimeTemp > 300) ? null : currentRealtimeTemp;
+
+                    if (chart.data.labels.length === 0 || chart.data.labels[chart.data.labels.length - 1] !== timeStr) {
+                        chart.data.labels.push(timeStr);
+                        chart.data.datasets[0].data.push(currentRealtimeFlow);
+                        chart.data.datasets[1].data.push(tempToPush);
+                        
+                        if(chart.data.labels.length > 1500) { 
+                            chart.data.labels.shift(); 
+                            chart.data.datasets[0].data.shift(); 
+                            chart.data.datasets[1].data.shift();
+                        }
+                        chart.update();
+                    } else {
+                        chart.data.datasets[0].data[chart.data.datasets[0].data.length - 1] = currentRealtimeFlow;
+                        chart.data.datasets[1].data[chart.data.datasets[1].data.length - 1] = tempToPush;
+                        chart.update();
+                    }
+                }, 5000);
+            }
+        }
+
+        async function loadBarChart() {
+            initChart('bar');
+            let labels = [], dailyUsage = [];
+            dailyStats = {}; 
+
+            for (let date of availableDates) {
+                let snap = await db.ref('his/' + date).once('value');
+                if(!snap.exists()) snap = await db.ref('flow/his/' + date).once('value');
+                
+                if (snap.exists()) {
+                    let dataObj = snap.val();
+                    let keys = Object.keys(dataObj).sort();
+                    
+                    if (keys.length > 0) {
+                        let firstVal = dataObj[keys[0]].t;
+                        let lastVal = dataObj[keys[keys.length - 1]].t;
+                        let total = Math.max(0, lastVal - firstVal);
+
+                        let sumTemp = 0, countTemp = 0;
+                        let sumFlow = 0, countFlow = 0;
+
+                        for (let key of keys) {
+                            let entry = dataObj[key];
+                            if (entry.temp !== undefined && entry.temp > 10 && entry.temp < 300) {
+                                sumTemp += entry.temp;
+                                countTemp++;
+                            }
+                            if (entry.i !== undefined && entry.i > 0) {
+                                sumFlow += entry.i;
+                                countFlow++;
+                            }
+                        }
+
+                        let avgTemp = countTemp > 0 ? (sumTemp / countTemp).toFixed(1) : "N/A";
+                        let avgFlow = countFlow > 0 ? (sumFlow / countFlow).toFixed(2) : "N/A";
+                        let roundedTotal = Math.round(total);
+
+                        dailyStats[date] = {
+                            first: firstVal.toFixed(1),
+                            last: lastVal.toFixed(1),
+                            total: roundedTotal,
+                            avgTemp: avgTemp,
+                            avgFlow: avgFlow
+                        };
+
+                        labels.push(date);
+                        dailyUsage.push(roundedTotal);
+                    }
+                }
+            }
+            
+            chart.data.labels = labels;
+            chart.data.datasets[0].data = dailyUsage;
+            chart.update();
+        }
+
+        document.getElementById('prevBtn').onclick = () => { currentIndex--; loadDataByMode(); };
+        document.getElementById('nextBtn').onclick = () => { currentIndex++; loadDataByMode(); };
+        
+        document.getElementById('chartTypeSelect').onchange = (e) => { 
+            chartMode = e.target.value; 
+            if (chartMode === 'bar') document.getElementById('dateNavGroup').style.display = 'none';
+            else document.getElementById('dateNavGroup').style.display = 'flex';
+            loadDataByMode(); 
+        };
+
+        document.getElementById('exportBtn').onclick = async () => {
+            const start = document.getElementById('startDate').value;
+            const end = document.getElementById('endDate').value;
+            
+            if(!start || !end) return alert("Vui lòng chọn Ngày Bắt Đầu và Ngày Kết Thúc!");
+            if(new Date(start) > new Date(end)) return alert("Ngày bắt đầu phải nhỏ hơn hoặc bằng Ngày kết thúc!");
+
+            const btn = document.getElementById('exportBtn');
+            btn.innerText = "⏳ Đang tạo...";
+            
+            let allRows = [];
+            let filteredDates = availableDates.filter(d => d >= start && d <= end);
+
+            for (let date of filteredDates) {
+                let snap = await db.ref('his/' + date).once('value');
+                if(!snap.exists()) snap = await db.ref('flow/his/' + date).once('value');
+                
+                if(snap.exists()){
+                    Object.entries(snap.val()).forEach(([time, v]) => {
+                        let tempExport = "N/A";
+                        if (v.temp !== undefined) tempExport = (v.temp < 10 || v.temp > 300) ? "Lỗi cảm biến" : v.temp;
+
+                        allRows.push({ 
+                            "Ngày": date, "Giờ": time, 
+                            "Lưu lượng (m3/h)": v.i, "Số tổng (m3)": v.t, "Nhiệt độ (°C)": tempExport
+                        });
+                    });
+                }
+            }
+
+            if(allRows.length > 0) {
+                const ws = XLSX.utils.json_to_sheet(allRows);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Bao_Cao");
+                XLSX.writeFile(wb, `Bao_Cao_${start}_To_${end}.xlsx`);
+            } else {
+                alert("Không có dữ liệu trong khoảng này!");
+            }
+            btn.innerText = "TẢI FILE";
+        };
+
+        initChart('line');
+        setTimeout(() => { if(availableDates.length === 0) document.getElementById('dateLabel').innerText = "Chưa có dữ liệu"; }, 5000);
+    </script>
+</body>
+</html>
