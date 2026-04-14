@@ -19,7 +19,6 @@
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f0f2f5; margin: 0; padding: 20px; color: #333; }
         .container { max-width: 1100px; margin: 0 auto; }
         
-        /* CĂN CHỈNH LẠI TIÊU ĐỀ VÀ DẤU CHẤM TRẠNG THÁI */
         .main-title { 
             color: #1a73e8; margin-bottom: 25px; 
             text-transform: uppercase; letter-spacing: 0.5px; 
@@ -29,18 +28,17 @@
 
         #esp-status {
             width: 18px; height: 18px;
-            background-color: #ea4335; /* Đỏ mặc định khi Offline */
+            background-color: #ea4335;
             border-radius: 50%;
             display: inline-block;
-            box-shadow: 0 0 6px rgba(234, 67, 53, 0.5); /* Hiệu ứng tỏa sáng đỏ */
+            box-shadow: 0 0 6px rgba(234, 67, 53, 0.5);
             transition: background-color 0.3s ease, box-shadow 0.3s ease;
             cursor: help;
         }
 
-        /* Lớp CSS khi Online */
         .status-online {
             background-color: #34a853 !important; 
-            box-shadow: 0 0 10px rgba(52, 168, 83, 0.8) !important; /* Tỏa sáng xanh */
+            box-shadow: 0 0 10px rgba(52, 168, 83, 0.8) !important;
         }
         
         .card { background: #fff; padding: 15px 20px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); margin-bottom: 20px; }
@@ -70,30 +68,24 @@
         input[type="text"] { width: 100px; text-align: center; }
 
         .chart-container { position: relative; height: 400px; width: 100%; }
-        #dateLabel { font-weight: bold; font-size: 15px; color: #202124; min-width: 130px; text-align: center; }
+        #dateLabel { font-weight: bold; font-size: 15px; color: #202124; min-width: 140px; text-align: center; }
         .export-section { display: flex; align-items: center; gap: 8px; }
         #error-log { color: red; text-align: center; font-weight: bold; margin-bottom: 10px; font-size: 13px;}
 
         @media (max-width: 768px) {
             body { padding: 10px; }
             .main-title { font-size: 18px; margin-bottom: 15px; }
-            
             .dashboard-grid { flex-direction: column; gap: 12px; }
             .box p { font-size: 32px; }
-
             .nav-controls { flex-direction: column; gap: 15px; align-items: stretch; }
-            
             .left-controls { flex-direction: column; width: 100%; gap: 10px; }
             .left-controls select { width: 100%; text-align: center; font-size: 14px; padding: 10px;}
-            
             .btn-group { width: 100%; justify-content: space-between; }
             .btn-group button { width: 45px; height: 40px; }
-            
             .export-section { flex-wrap: wrap; justify-content: center; gap: 10px; }
             .export-section > span:first-child { width: 100%; text-align: center; margin-bottom: -5px; }
             .export-section input[type="text"] { flex: 1; min-width: 120px; font-size: 14px; padding: 10px;}
             .export-section button { width: 100%; padding: 12px; font-size: 14px; margin-top: 5px; }
-
             .chart-container { height: 320px; }
         }
     </style>
@@ -127,8 +119,8 @@
                 
                 <div class="left-controls">
                     <select id="chartTypeSelect">
-                        <option value="line">Lưu lượng & Nhiệt độ</option>
                         <option value="bar">Tổng lưu lượng (Ngày)</option>
+                        <option value="line">Lưu lượng & Nhiệt độ</option>
                     </select>
 
                     <div class="btn-group" id="dateNavGroup">
@@ -181,12 +173,15 @@
 
         let chart;
         let availableDates = [];
+        let availableMonths = [];
         let currentIndex = -1;
-        let chartMode = 'line'; 
+        let currentMonthIndex = -1;
+        let chartMode = 'bar'; 
         let dailyStats = {}; 
         
         const todayObj = new Date();
         const todayStr = todayObj.getFullYear() + "-" + String(todayObj.getMonth() + 1).padStart(2, '0') + "-" + String(todayObj.getDate()).padStart(2, '0');
+        const thisMonthStr = todayStr.substring(0, 7);
         
         let currentRealtimeFlow = 0; 
         let currentRealtimeTemp = 0; 
@@ -194,6 +189,34 @@
 
         let startFp = flatpickr("#startDate", { dateFormat: "Y-m-d", disable: [function(date) { return true; }] }); 
         let endFp = flatpickr("#endDate", { dateFormat: "Y-m-d", disable: [function(date) { return true; }] });
+
+        // PLUGIN: Vẽ số lên đầu cột
+        const valueOnTopPlugin = {
+            id: 'valueOnTop',
+            afterDatasetsDraw(chart) {
+                const { ctx } = chart;
+                chart.data.datasets.forEach((dataset, i) => {
+                    const meta = chart.getDatasetMeta(i);
+                    // Chỉ áp dụng cho biểu đồ cột
+                    if (meta.type === 'bar' && !meta.hidden) {
+                        meta.data.forEach((element, index) => {
+                            const val = dataset.data[index];
+                            if (val > 0) {
+                                const dataString = fmt(val, 2);
+                                ctx.fillStyle = '#333'; // Màu chữ
+                                ctx.font = 'bold 13px sans-serif';
+                                ctx.textAlign = 'center';
+                                ctx.textBaseline = 'bottom';
+                                const position = element.tooltipPosition();
+                                // Dịch chữ lên một chút (y - 5)
+                                ctx.fillText(dataString, position.x, position.y - 5);
+                            }
+                        });
+                    }
+                });
+            }
+        };
+        Chart.register(valueOnTopPlugin);
 
         function initChart(mode = 'line') {
             const ctx = document.getElementById('mainChart').getContext('2d');
@@ -233,13 +256,13 @@
                             y: { 
                                 type: 'linear', display: true, position: 'left', 
                                 title: { display: true, text: 'Lưu lượng (m³/h)' },
+                                min: 0, 
                                 ticks: { callback: function(val) { return fmt(val, 2); } }
                             },
                             y1: { 
                                 type: 'linear', display: true, position: 'right', 
                                 title: { display: true, text: 'Nhiệt độ (°C)' },
-                                min: 0,      
-                                max: 300,    
+                                min: 0, max: 200, 
                                 grid: { drawOnChartArea: false },
                                 ticks: { callback: function(val) { return fmt(val, 1); } }
                             }
@@ -273,11 +296,11 @@
                         borderWidth: 2
                     }]},
                     options: { 
-                        responsive: true, 
-                        maintainAspectRatio: false, 
+                        responsive: true, maintainAspectRatio: false, 
+                        layout: { padding: { top: 25 } }, // Khoảng trống phía trên để chứa số liệu
                         scales: { 
                             y: { 
-                                beginAtZero: true,
+                                min: 0, 
                                 ticks: { callback: function(val) { return fmt(val, 2); } }
                             } 
                         },
@@ -288,18 +311,24 @@
                                     title: function() { return ''; },
                                     label: function(context) {
                                         let dateStr = context.label;
-                                        let parts = dateStr.split('-');
-                                        let formattedDate = parts[2] + '/' + parts[1] + '/' + parts[0];
-                                        
                                         let stats = dailyStats[dateStr] || {};
                                         
                                         let line1 = `Tổng: Cuối (${fmt(stats.last, 2)}) - Đầu (${fmt(stats.first, 2)}) = ${fmt(stats.total, 2)} m³`;
                                         let line2 = `Nhiệt độ trung bình: ${fmt(stats.avgTemp, 1)} °C`;
                                         let line3 = `Lưu lượng trung bình: ${fmt(stats.avgFlow, 2)} m³/h`;
                                         
-                                        let firstTime = stats.firstTime || "00:00";
-                                        let lastTime = stats.lastTime || "23:59";
-                                        let timeText = `Thời gian: ngày ${formattedDate} từ ${firstTime} đến ${lastTime}`;
+                                        let formatD = (dStr) => {
+                                            if(!dStr) return "";
+                                            let p = dStr.split('-');
+                                            return p[2] + '/' + p[1] + '/' + p[0];
+                                        };
+
+                                        let sDate = formatD(stats.startDate);
+                                        let eDate = formatD(stats.endDate);
+                                        let sTime = stats.startTime || "00:00";
+                                        let eTime = stats.endTime || "23:59";
+
+                                        let timeText = `Lấy dữ liệu từ: ${sTime} (${sDate}) đến ${eTime} (${eDate})`;
 
                                         return [line1, line2, line3, "", timeText];
                                     }
@@ -318,14 +347,12 @@
             if(!snap.exists()) return;
             const data = snap.val();
             
-            // LOGIC SÁNG ĐÈN XANH
             const statusDot = document.getElementById('esp-status');
             statusDot.classList.add('status-online');
             statusDot.title = "Đang hoạt động (Online)";
             
             clearTimeout(espStatusTimeout);
             espStatusTimeout = setTimeout(() => {
-                // TẮT ĐÈN XANH -> VỀ MÀU ĐỎ MẶC ĐỊNH
                 statusDot.classList.remove('status-online');
                 statusDot.title = "Bị mất kết nối (Offline)";
             }, 15000);
@@ -391,13 +418,19 @@
                             startFp.set("enable", availableDates);
                             endFp.set("enable", availableDates);
 
+                            availableMonths = [...new Set(availableDates.map(d => d.substring(0, 7)))].sort();
+
                             if(currentIndex === -1) {
                                 currentIndex = availableDates.indexOf(todayStr);
                                 if (currentIndex === -1) currentIndex = availableDates.length - 1;
-                                loadDataByMode();
-                            } else {
-                                updateNavButtons();
                             }
+
+                            if(currentMonthIndex === -1) {
+                                currentMonthIndex = availableMonths.indexOf(thisMonthStr);
+                                if (currentMonthIndex === -1) currentMonthIndex = availableMonths.length - 1;
+                            }
+
+                            loadDataByMode();
                         } else {
                             document.getElementById('dateLabel').innerText = "Chưa có dữ liệu";
                         }
@@ -410,20 +443,37 @@
         async function loadDataByMode() {
             if(availableDates.length === 0) return;
 
-            if (chartMode === 'line') await loadLineChart(availableDates[currentIndex]);
-            else await loadBarChart();
-            
-            updateNavButtons();
+            updateNavUI();
+
+            if (chartMode === 'line') {
+                await loadLineChart(availableDates[currentIndex]);
+            } else {
+                await loadBarChart(availableMonths[currentMonthIndex]);
+            }
         }
 
-        function updateNavButtons() {
-            document.getElementById('prevBtn').disabled = (currentIndex <= 0 || chartMode === 'bar');
-            document.getElementById('nextBtn').disabled = (currentIndex >= availableDates.length - 1 || chartMode === 'bar');
+        function updateNavUI() {
+            if (chartMode === 'bar') {
+                let m = availableMonths[currentMonthIndex];
+                if (m) {
+                    let parts = m.split('-');
+                    document.getElementById('dateLabel').innerText = "Tháng: " + parts[1] + "/" + parts[0];
+                }
+                document.getElementById('prevBtn').disabled = (currentMonthIndex <= 0);
+                document.getElementById('nextBtn').disabled = (currentMonthIndex >= availableMonths.length - 1);
+            } else {
+                let d = availableDates[currentIndex];
+                if (d) {
+                    let parts = d.split('-');
+                    document.getElementById('dateLabel').innerText = "Ngày: " + parts[2] + "/" + parts[1] + "/" + parts[0];
+                }
+                document.getElementById('prevBtn').disabled = (currentIndex <= 0);
+                document.getElementById('nextBtn').disabled = (currentIndex >= availableDates.length - 1);
+            }
         }
 
         async function loadLineChart(date) {
             initChart('line');
-            document.getElementById('dateLabel').innerText = "Ngày: " + date;
             
             let snap = await db.ref('his/' + date).once('value');
             if (!snap.exists()) snap = await db.ref('flow/his/' + date).once('value');
@@ -436,7 +486,6 @@
 
             labels.forEach(t => {
                 flowValues.push(history[t].i);
-                
                 let tempVal = history[t].temp;
                 if (tempVal === undefined || tempVal < 10 || tempVal > 300) {
                     tempValues.push(null); 
@@ -451,13 +500,29 @@
             chart.update();
         }
 
-        async function loadBarChart() {
+        async function loadBarChart(selectedMonth) {
             initChart('bar');
+            if (!selectedMonth) return;
+
             let labels = [], dailyUsage = [];
             let bgColors = [], bdColors = [];
             dailyStats = {}; 
 
-            for (let date of availableDates) {
+            let datesInMonth = availableDates.filter(d => d.startsWith(selectedMonth));
+            if(datesInMonth.length === 0) {
+                chart.update();
+                return;
+            }
+
+            let fetchDates = [...datesInMonth];
+            let lastIndexInMonth = availableDates.indexOf(datesInMonth[datesInMonth.length - 1]);
+            if (lastIndexInMonth !== -1 && lastIndexInMonth < availableDates.length - 1) {
+                fetchDates.push(availableDates[lastIndexInMonth + 1]);
+            }
+
+            let dayData = {};
+
+            await Promise.all(fetchDates.map(async (date) => {
                 let snap = await db.ref('his/' + date).once('value');
                 if(!snap.exists()) snap = await db.ref('flow/his/' + date).once('value');
                 
@@ -466,68 +531,90 @@
                     let keys = Object.keys(dataObj).sort();
                     
                     if (keys.length > 0) {
-                        let firstKey = keys[0];
-                        let firstVal = 0;
+                        let firstKey = keys[0], firstVal = 0;
                         for (let key of keys) {
                             if (dataObj[key].t !== undefined && dataObj[key].t > 0) {
-                                firstKey = key;
-                                firstVal = dataObj[key].t;
-                                break;
+                                firstKey = key; firstVal = dataObj[key].t; break;
                             }
                         }
 
-                        let lastKey = keys[keys.length - 1];
-                        let lastVal = 0;
+                        let lastKey = keys[keys.length - 1], lastVal = 0;
                         for (let i = keys.length - 1; i >= 0; i--) {
                             let key = keys[i];
                             if (dataObj[key].t !== undefined && dataObj[key].t > 0) {
-                                lastKey = key;
-                                lastVal = dataObj[key].t;
-                                break;
+                                lastKey = key; lastVal = dataObj[key].t; break;
                             }
                         }
 
-                        let total = Math.max(0, lastVal - firstVal);
-
-                        let sumTemp = 0, countTemp = 0;
-                        let sumFlow = 0, countFlow = 0;
-
+                        let sumTemp = 0, countTemp = 0, sumFlow = 0, countFlow = 0;
                         for (let key of keys) {
                             let entry = dataObj[key];
-                            if (entry.temp !== undefined && entry.temp > 10 && entry.temp < 300) {
-                                sumTemp += entry.temp;
-                                countTemp++;
-                            }
-                            if (entry.i !== undefined && entry.i > 0) {
-                                sumFlow += entry.i;
-                                countFlow++;
-                            }
+                            if (entry.temp !== undefined && entry.temp > 10 && entry.temp < 300) { sumTemp += entry.temp; countTemp++; }
+                            if (entry.i !== undefined && entry.i > 0) { sumFlow += entry.i; countFlow++; }
                         }
 
-                        let avgTemp = countTemp > 0 ? (sumTemp / countTemp) : "N/A";
-                        let avgFlow = countFlow > 0 ? (sumFlow / countFlow) : "N/A";
-
-                        let isRed = false;
-                        if (firstKey > "00:05") isRed = true; 
-                        if (date !== todayStr && lastKey < "23:55") isRed = true; 
-
-                        bgColors.push(isRed ? '#ea4335' : '#34a853');
-                        bdColors.push(isRed ? '#ea4335' : '#34a853');
-
-                        dailyStats[date] = {
-                            first: firstVal,
-                            last: lastVal,
-                            total: total,
-                            avgTemp: avgTemp,
-                            avgFlow: avgFlow,
-                            firstTime: firstKey,
-                            lastTime: lastKey
+                        dayData[date] = {
+                            firstVal, lastVal, firstKey, lastKey,
+                            avgTemp: countTemp > 0 ? (sumTemp / countTemp) : "N/A",
+                            avgFlow: countFlow > 0 ? (sumFlow / countFlow) : "N/A"
                         };
-
-                        labels.push(date);
-                        dailyUsage.push(total); 
                     }
                 }
+            }));
+
+            for (let i = 0; i < datesInMonth.length; i++) {
+                let date = datesInMonth[i];
+                if (!dayData[date]) continue;
+
+                let firstVal = dayData[date].firstVal;
+                let lastVal = dayData[date].lastVal;
+                let nextVal = null;
+                let nextDateStr = null;
+
+                let currIdx = availableDates.indexOf(date);
+                if (currIdx !== -1 && currIdx < availableDates.length - 1) {
+                    let nextDate = availableDates[currIdx + 1];
+                    if (dayData[nextDate]) {
+                        nextVal = dayData[nextDate].firstVal;
+                        nextDateStr = nextDate;
+                    }
+                }
+
+                let total = 0, endValForTooltip = 0;
+                let endDateTooltip = date;
+                let endTimeTooltip = dayData[date].lastKey;
+
+                if (nextVal !== null) {
+                    total = Math.max(0, nextVal - firstVal);
+                    endValForTooltip = nextVal;
+                    endDateTooltip = nextDateStr;
+                    endTimeTooltip = dayData[nextDateStr].firstKey;
+                } else {
+                    total = Math.max(0, lastVal - firstVal);
+                    endValForTooltip = lastVal;
+                }
+
+                let isRed = false;
+                if (dayData[date].firstKey > "00:05") isRed = true; 
+                if (date !== todayStr && dayData[date].lastKey < "23:55") isRed = true; 
+
+                bgColors.push(isRed ? '#ea4335' : '#34a853');
+                bdColors.push(isRed ? '#ea4335' : '#34a853');
+
+                dailyStats[date] = {
+                    first: firstVal,
+                    last: endValForTooltip,
+                    total: total,
+                    avgTemp: dayData[date].avgTemp,
+                    avgFlow: dayData[date].avgFlow,
+                    startDate: date,
+                    startTime: dayData[date].firstKey,
+                    endDate: endDateTooltip,
+                    endTime: endTimeTooltip
+                };
+
+                labels.push(date);
+                dailyUsage.push(total); 
             }
             
             chart.data.labels = labels;
@@ -537,13 +624,20 @@
             chart.update();
         }
 
-        document.getElementById('prevBtn').onclick = () => { currentIndex--; loadDataByMode(); };
-        document.getElementById('nextBtn').onclick = () => { currentIndex++; loadDataByMode(); };
+        document.getElementById('prevBtn').onclick = () => { 
+            if (chartMode === 'bar') currentMonthIndex--;
+            else currentIndex--;
+            loadDataByMode(); 
+        };
         
+        document.getElementById('nextBtn').onclick = () => { 
+            if (chartMode === 'bar') currentMonthIndex++;
+            else currentIndex++;
+            loadDataByMode(); 
+        };
+
         document.getElementById('chartTypeSelect').onchange = (e) => { 
             chartMode = e.target.value; 
-            if (chartMode === 'bar') document.getElementById('dateNavGroup').style.display = 'none';
-            else document.getElementById('dateNavGroup').style.display = 'flex';
             loadDataByMode(); 
         };
 
@@ -588,7 +682,7 @@
             btn.innerText = "TẢI FILE";
         };
 
-        initChart('line');
+        initChart('bar');
         setTimeout(() => { if(availableDates.length === 0) document.getElementById('dateLabel').innerText = "Chưa có dữ liệu"; }, 5000);
     </script>
 </body>
